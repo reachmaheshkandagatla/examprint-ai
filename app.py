@@ -10,7 +10,7 @@ import os
 import pymupdf as fitz
 import pandas as pd
 import streamlit as st
-from src.branding import render_brand_header, render_upload_intro
+from src.branding import render_brand_header, render_tab_banner
 from src.database import Database
 from src.editor_state import apply_editor_changes
 from src.export_engine import export_print, export_csv, export_zip
@@ -88,14 +88,14 @@ work = Path(st.session_state.workspace.name)
 db = Database(os.environ.get("EXAMPRINT_DB", "data/examprint.sqlite3"))
 tabs = st.tabs(["Upload & Configure", "Print Preview", "Editable Topic Index", "Export"],
                key="workflow_tab", on_change="rerun")
+for index, tab in enumerate(tabs):
+    with tab:
+        render_tab_banner(index)
 
 with tabs[0]:
-    welcome = st.empty()
     uploaded = st.file_uploader("Lecture PDF", type=["pdf"], key=f'upload_{st.session_state.get("upload_epoch", 0)}')
     password = st.text_input("PDF password (if required)", type="password")
     if uploaded is None:
-        with welcome.container():
-            render_upload_intro()
         st.info("Upload a PDF to configure your handout.")
         next_tab("Print Preview", disabled=True)
         st.stop()
@@ -163,7 +163,6 @@ with tabs[0]:
     next_tab("Print Preview")
 
 with tabs[1]:
-    st.subheader("Three-side print preview")
     st.number_input("Starting slide", min_value=1, max_value=meta["total_pages"], step=1, key="start_slide")
     cols = st.columns(3)
     cols[0].button("Previous", on_click=move_preview, args=(-1, meta["total_pages"], settings.slides_per_side))
@@ -189,7 +188,6 @@ with tabs[1]:
     next_tab("Editable Topic Index")
 
 with tabs[2]:
-    st.caption("Topics use PDF bookmarks, native text, font sizes, and heading-position heuristics. No semantic AI or OCR is used.")
     index_source = st.selectbox("Index source", ["Auto", "Table of contents", "Sessions & course plans", "Course plans", "Slide headings"])
     st.caption("Auto uses sessions when present, then a table of contents, then course plans or slide headings. Subtopics are matched within their session; next-session notices are ignored. Unmatched topics stay excluded for manual assignment.")
     density = st.selectbox("Index density (slide headings)", ["Compact", "Balanced", "Detailed"], index=1)
@@ -356,7 +354,6 @@ with tabs[2]:
     next_tab("Export")
 
 with tabs[3]:
-    st.caption("ExamPrint.pdf and ExamIndex.pdf remain separate. Cross-file index links depend on the PDF viewer; keep both files in the same folder.")
     export_sig = index_signature(meta, settings, st.session_state.entries)
     if st.button("Generate ExamPrint.pdf", type="primary"):
         progress = st.progress(0.0, text="Generating printed sides…")

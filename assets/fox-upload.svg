@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 350 220" role="img" aria-label="Fox placing a lecture PDF into an upload tray"><title>Fox placing a lecture PDF into an upload tray</title><ellipse cx="183" cy="112" rx="151" ry="95" fill="#E9F2FF"/>
+<path d="M35 193h285" stroke="#C5D9F5" stroke-width="2"/>
+<path d="M238 177q68 14 70-55l-36 24-35 10Z" fill="#F18437"/>
+<path d="m308 122-36 24 21 9q14-14 15-33Z" fill="#FFF4DF"/>
+<path d="m199 91 40 0 25 100h-91Z" fill="#E87533"/><g transform="translate(150 12) scale(.9)">
+<path d="M30 70 24 13 61 37 91 37 127 13 121 72 77 107Z" fill="#F18437"/>
+<path d="m24 13 37 24-31 33Zm103 0-6 59-30-35Z" fill="#D65C28"/>
+<path d="m32 28 5 27 16-14Zm86 0-6 27-14-14Z" fill="#FFD9B5"/>
+<path d="m30 70 21-11 26 32 26-32 18 13-44 35Z" fill="#FFF4DF"/>
+<path d="m61 37 16 54 14-54Z" fill="#FFAA55"/>
+<path d="m48 60 9 5m41-5-9 5" stroke="#18345B" stroke-width="4" stroke-linecap="round"/>
+<path d="m70 86 14 0-7 9Z" fill="#18345B"/></g>
+<g transform="rotate(-10 120 119)"><rect x="80" y="59" width="94" height="108" rx="8" fill="white" stroke="#376BB7" stroke-width="2.5"/>
+<rect x="94" y="74" width="66" height="29" rx="4" fill="#D6E6FF"/>
+<path d="M96 118h59m-59 12h48m-48 12h55" stroke="#A5C3EB" stroke-width="4" stroke-linecap="round"/></g>
+<path d="M60 160h46l9 11h35l9-11h37v34H60Z" fill="#B5D2FF" stroke="#376BB7" stroke-width="2.5" stroke-linejoin="round"/>
+<path d="M206 112q-16 6-39 19" fill="none" stroke="#F18437" stroke-width="20" stroke-linecap="round"/>
+<circle cx="53" cy="63" r="22" fill="#FFF" stroke="#D5E3F6"/>
+<path d="M53 74V52m-8 8 8-8 8 8" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>

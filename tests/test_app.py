@@ -27,6 +27,13 @@ def test_upload_preview_export_save(pdf_factory, tmp_path, monkeypatch):
         button(app, f"Next: {label} →").click().run()
         assert not app.exception
         assert app.session_state.workflow_tab == label
+    document_id = app.session_state.document_id
+    entry_ids = [entry["id"] for entry in app.session_state.entries]
+    button(app, "Home — Upload & Configure").click().run()
+    assert not app.exception
+    assert app.session_state.workflow_tab == "Upload & Configure"
+    assert app.session_state.document_id == document_id
+    assert [entry["id"] for entry in app.session_state.entries] == entry_ids
     assert next(d for d in app.get("download_button") if d.label == "Download ExamIndex.pdf").disabled
     button(app, "Generate / refresh preview").click().run()
     assert not app.exception
