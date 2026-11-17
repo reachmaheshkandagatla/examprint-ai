@@ -2,6 +2,7 @@
 from collections import Counter, defaultdict
 import re
 import pymupdf as fitz
+from .session_index import NOISE
 
 _TITLE = re.compile(r"(?:table\s+of\s+contents|contents)(?:\s*\(?continued\)?)?", re.I)
 _ROW = re.compile(r"^(.+?)(?:\s*\.{2,}\s*|\s+)(\d+|[ivxlcdm]+)\s*$", re.I)
@@ -21,22 +22,100 @@ def page_rows(page):
                 continue
             text = " ".join(s["text"] for s in line["spans"]).strip()
             if text:
-                lines.append((line["bbox"][1], line["bbox"][0], text))
+                lines.append((line["bbox"][1], line["bbox"][0], text, line["spans"]))
     rows = []
-    for y, x, text in sorted(lines):
+    for y, x, text, spans in sorted(lines, key=lambda item: (item[0], item[1])):
         if rows and abs(rows[-1]["y"] - y) <= 3:
             rows[-1]["text"] += " " + text
+            rows[-1]["spans"].extend(spans)
         else:
-            rows.append({"y": y, "x": x, "text": text})
+            rows.append({"y": y, "x": x, "text": text, "spans": list(spans)})
     return rows
 
 
+def row_ink(row):
+    """Measure native text darkness on white, accounting for fill opacity.
+
+    Numeric badges are decorative; only the title's letters vote.
+    """
+    total, weight = 0.0, 0
+    for span in row["spans"]:
+        count = sum(char.isalpha() for char in span["text"])
+        color = span.get("color", 0)
+        r, g, b = ((color >> shift) & 255 for shift in (16, 8, 0))
+        darkness = (1 - (.2126 * r + .7152 * g + .0722 * b) / 255)
+        total += count * darkness * span.get("alpha", 255) / 255
+        weight += count
+    return total / weight if weight else 0
+
+
+def highlighted_contents(pages):
+    """Recognize one dark active entry among faded entries on contents slides.
+
+    A repeated contents list without a clear active row stays unassigned.
+    Never use the other topics' presence as evidence of their start page.
+    """
+    slides = []
+    for index, rows in enumerate(pages):
+        title = next((row for row in rows if _TITLE.fullmatch(row["text"].strip())), None)
+        if title is None:
+            continue
+        body = []
+        for row in rows:
+            text = row["text"].strip()
+            if row["y"] <= title["y"] or NOISE.search(text) or not any(c.isalpha() for c in text):
+                continue
+            # Conventional contents entries have trailing destination numbers.
+            if _ROW.fullmatch(text):
+                continue
+            text = re.sub(r"^\s*(?:\d+(?:\.\d+)*[.)]?\s+|[•▪➢●]\s*)", "", text).strip()
+            if len(text) >= 2:
+                title_x = min(span["bbox"][0] for span in row["spans"] if any(c.isalpha() for c in span["text"]))
+                body.append({**row, "x": title_x, "topic": text, "ink": row_ink(row)})
+        if len(body) < 2:
+            continue
+        ordered = sorted(body, key=lambda row: row["ink"], reverse=True)
+        active = None
+        # Require one clearly dark row and faded alternatives, not a tiny color difference.
+        if ordered[0]["ink"] >= .45 and ordered[1]["ink"] <= .35 and ordered[0]["ink"] - ordered[1]["ink"] >= .25:
+            active = ordered[0]
+        signature = tuple(title_key(row["topic"]) for row in body)
+        slides.append((index, body, active, signature))
+    counts = Counter(signature for _, _, _, signature in slides)
+    topics, used_pages, ambiguous = {}, [], []
+    for index, body, active, signature in slides:
+        has_fading = min(row["ink"] for row in body) <= .35 and max(row["ink"] for row in body) >= .45
+        if active is None and counts[signature] < 2 and not has_fading:
+            continue
+        used_pages.append(index)
+        if active is None:
+            ambiguous.append(index)
+        left = min(row["x"] for row in body)
+        section = ""
+        for row in body:
+            child = row["x"] > left + 10 or bool(re.match(r"^\s*\d+\.\d+", row["text"]))
+            if not child:
+                section = row["topic"]
+            key = (title_key(section), title_key(row["topic"]))
+            entry = topics.setdefault(key, {"topic": row["topic"], "section": section,
+                                           "kind": "subtopic" if child else "heading",
+                                           "source_pages": [], "needs_review": True})
+            if row is active and not entry["source_pages"]:
+                entry.update(source_pages=[index], needs_review=False)
+    return {"topics": list(topics.values()), "pages": used_pages,
+            "ambiguous_pages": ambiguous, "method": "Highlighted contents slides"}
+
+
 def extract_toc(doc):
-    """Prefer explicit PDF destinations; otherwise match titles and infer proven offsets.
+    """Use active contents slides, then explicit destinations or proven offsets.
 
     Unmatched references stay empty unless at least two heading matches agree
     on a single offset. Offset-only matches still require review.
     """
+    pages = [page_rows(page) for page in doc]
+    highlighted = highlighted_contents(pages)
+    if highlighted["topics"] and any(topic["source_pages"] for topic in highlighted["topics"]):
+        return highlighted
     outline = doc.get_toc()
     if outline:
         topics, section = [], ""
@@ -50,7 +129,8 @@ def extract_toc(doc):
                            "needs_review": not valid})
         return {"topics": topics, "pages": [], "method": "PDF bookmarks"}
 
-    pages = [page_rows(page) for page in doc]
+    if highlighted["topics"]:
+        return highlighted
     contents, toc_pages, continuing = [], set(), False
     for index, rows in enumerate(pages):
         titles = [i for i, row in enumerate(rows) if _TITLE.fullmatch(row["text"].strip())]

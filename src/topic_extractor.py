@@ -6,7 +6,7 @@ from .pdf_engine import open_pdf
 from .toc_index import extract_toc
 from .session_index import text_lines, session_on_page, outline_on_page, highlighted_topics, session_topics
 
-EXTRACTOR_VERSION = 4
+EXTRACTOR_VERSION = 5
 
 
 def normalize_topic(text):

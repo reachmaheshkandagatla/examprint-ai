@@ -111,3 +111,97 @@ def test_toc_source_in_app(tmp_path, monkeypatch):
     next(b for b in app.button if b.label == 'Generate selected index PDF').click().run()
     assert not app.exception and not app.error
     assert not next(d for d in app.get('download_button') if d.label == 'Download ExamIndex.pdf').disabled
+
+
+def highlighted_slide(doc, active=(), opacity=False, numbered=True, children=False):
+    page = doc.new_page(width=960, height=540)
+    page.insert_text((35, 50), 'Table of Contents', fontsize=28, color=(.1, .05, .45))
+    titles = ['Introduction to Deep Learning', 'Why Deep Learning?', 'Applications of Deep Learning']
+    for index, title in enumerate(titles):
+        x = 95 if children and index else 65
+        y = 140 + index * 80
+        color = (.18, .12, .72) if index in active or opacity else (.83, .82, .94)
+        alpha = .18 if opacity and index not in active else 1
+        if numbered:
+            # Dark numeric badges must not count as highlighted topic text.
+            page.insert_text((35, y), str(index + 1), fontsize=18)
+        page.insert_text((x, y), title, fontsize=24, color=color, fill_opacity=alpha)
+    page.insert_text((100, 450), 'S1-2026-27 Work Integrated Learning Programmes', fontsize=16)
+    return page
+
+
+def test_repeated_highlights_start_at_marker_not_first_contents(tmp_path):
+    path = tmp_path / 'highlights.pdf'
+    with fitz.open() as doc:
+        highlighted_slide(doc, (0,))
+        doc.new_page().insert_text((40, 40), 'Why Deep Learning?', fontsize=20)
+        highlighted_slide(doc, (1,))
+        highlighted_slide(doc, (1,))
+        doc.save(path)
+    extraction = extract_headings(path)
+    topics = suggested_topics(extraction, 'Table of contents')
+    assert extraction['toc']['method'] == 'Highlighted contents slides'
+    assert [t['source_pages'] for t in topics] == [[0], [2], []]
+    assert [t['needs_review'] for t in topics] == [False, False, True]
+    assert len(topics) == 3
+    assert topics[1]['topic'] == 'Why Deep Learning?'
+    entries = make_entries(topics, 2)
+    assert [e['printed_page_reference'] for e in entries] == ['1', '2', '']
+    assert not entries[2]['included']
+    assert suggested_topics(extraction) == topics
+    output = tmp_path / 'index.pdf'
+    export_index(entries, output, 2)
+    with fitz.open(output) as pdf:
+        assert 'Applications' not in pdf[0].get_text()
+        assert {link['page'] for link in pdf[0].get_links()} == {0, 1}
+
+
+def test_highlights_use_native_opacity_and_indented_children():
+    with fitz.open() as doc:
+        highlighted_slide(doc, (0,), opacity=True, numbered=True, children=True)
+        highlighted_slide(doc, (1,), opacity=True, numbered=True, children=True)
+        result = extract_toc(doc)
+        assert [t['source_pages'] for t in result['topics']] == [[0], [1], []]
+        assert [t['kind'] for t in result['topics']] == ['heading', 'subtopic', 'subtopic']
+        assert result['topics'][1]['section'] == 'Introduction to Deep Learning'
+
+
+def test_ambiguous_highlights_do_not_assign_any_topic():
+    with fitz.open() as doc:
+        highlighted_slide(doc, (0, 1))
+        result = extract_toc(doc)
+        assert result['ambiguous_pages'] == [0]
+        assert all(not t['source_pages'] and t['needs_review'] for t in result['topics'])
+
+
+def test_equal_color_repeated_lists_do_not_guess_first_topic():
+    with fitz.open() as doc:
+        highlighted_slide(doc, (0, 1, 2))
+        highlighted_slide(doc, (0, 1, 2))
+        result = extract_toc(doc)
+        assert result['ambiguous_pages'] == [0, 1]
+        assert all(not t['source_pages'] for t in result['topics'])
+
+
+def test_highlighted_contents_app_export(tmp_path, monkeypatch):
+    from io import BytesIO
+    import streamlit as st
+    from streamlit.testing.v1 import AppTest
+
+    path = tmp_path / 'highlighted.pdf'
+    with fitz.open() as doc:
+        highlighted_slide(doc, (0,))
+        highlighted_slide(doc, (0, 1))  # Ambiguous: must be reported, not assigned.
+        highlighted_slide(doc, (1,))
+        doc.save(path)
+    uploaded = BytesIO(path.read_bytes())
+    uploaded.name, uploaded.file_id, uploaded.size = 'highlighted.pdf', 'highlight-upload', len(uploaded.getbuffer())
+    monkeypatch.setattr(st, 'file_uploader', lambda *args, **kwargs: uploaded)
+    monkeypatch.setenv('EXAMPRINT_DB', str(tmp_path / 'ui.sqlite'))
+    app = AppTest.from_file('../app.py').run(timeout=20)
+    assert not app.exception
+    assert [e['source_pages'] for e in app.session_state.entries] == [[0], [2], []]
+    assert any('No single active topic' in warning.value and '2' in warning.value for warning in app.warning)
+    next(b for b in app.button if b.label == 'Generate selected index PDF').click().run()
+    assert not app.exception and not app.error
+    assert not next(d for d in app.get('download_button') if d.label == 'Download ExamIndex.pdf').disabled

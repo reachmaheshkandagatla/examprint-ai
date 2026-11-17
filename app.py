@@ -219,6 +219,10 @@ with tabs[2]:
         if index_source == "Table of contents" or (index_source == "Auto" and toc.get("topics") and not extraction.get("sessions")):
             st.caption(f"Found {len(toc.get('topics', []))} contents entries using {toc.get('method', 'contents pages')}. Main headings and indented subtopics share a group. Deeper levels are grouped beneath the main heading.")
             st.info("Choose Use suggested index below to apply these suggestions. Existing edits are preserved until you replace them. Inferred page references need review.")
+            if toc.get("method") == "Highlighted contents slides":
+                st.caption("The dark topic on each faded contents slide starts on that slide. Repeated highlights keep the first start page; topics never highlighted stay excluded. Native text color and opacity are used, not OCR.")
+                if toc.get("ambiguous_pages"):
+                    st.warning("No single active topic could be identified on PDF page(s): " + ", ".join(str(page + 1) for page in toc["ambiguous_pages"]) + ". Review these slides; no start page was assigned from them.")
             if not toc.get("topics"):
                 st.warning("No readable table of contents or PDF bookmarks found. Scanned contents need OCR, which is not supported; add entries manually or choose another index source.")
         plans = extraction.get("course_plans", [])
