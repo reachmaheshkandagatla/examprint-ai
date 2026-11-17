@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-labelledby="title desc">
+  <title id="title">ExamPrint paper fox</title>
+  <desc id="desc">An orange fox aligns a stack of blue and white handout pages with its paw.</desc>
+  <!-- Pointed ears and folded-paper face. -->
+  <path d="M30 70 24 13 61 37 91 37 127 13 121 72 77 107Z" fill="#F18437"/>
+  <path d="m24 13 37 24-31 33Z" fill="#D65C28"/>
+  <path d="m127 13-6 59-30-35Z" fill="#DB6729"/>
+  <path d="m32 28 5 27 16-14Z" fill="#FFD9B5"/>
+  <path d="m118 28-6 27-14-14Z" fill="#FFD9B5"/>
+  <path d="m30 70 21-11 26 32 26-32 18 13-44 35Z" fill="#FFF4DF"/>
+  <path d="m61 37 16 54 14-54Z" fill="#FFAA55"/>
+  <path d="m48 60 9 5m41-5-9 5" stroke="#18345B" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="m70 86 14 0-7 9Z" fill="#18345B"/>
+  <!-- Three aligned sheets, with a miniature slide grid. -->
+  <rect x="30" y="109" width="98" height="39" rx="7" fill="#A7C8F6"/>
+  <rect x="25" y="101" width="98" height="39" rx="7" fill="#D9E8FF" stroke="#245AB0" stroke-width="2.5"/>
+  <path d="M28 91h79l12 12v26H21V98a7 7 0 0 1 7-7Z" fill="#FFF" stroke="#245AB0" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M107 91v12h12" fill="#D9E8FF" stroke="#245AB0" stroke-width="2.5" stroke-linejoin="round"/>
+  <g fill="#B5D2FF"><rect x="32" y="101" width="25" height="8" rx="2"/><rect x="63" y="101" width="25" height="8" rx="2"/><rect x="32" y="114" width="25" height="8" rx="2"/><rect x="63" y="114" width="25" height="8" rx="2"/></g>
+  <path d="M115 77q21 4 18 25l-3 10q-3 9-15 5l-13-5q-8-5-4-12 3-6 11-3l5 2Z" fill="#F18437"/>
+  <path d="m108 106 9 3m-5-9 9 3" stroke="#C45225" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

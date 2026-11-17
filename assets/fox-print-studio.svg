@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 300" role="img" aria-labelledby="title desc">
+<title id="title">A little order. A lot less paper.</title>
+<desc id="desc">A paper fox sorts loose lecture slides into a neatly aligned handout stack, ready to print.</desc>
+<ellipse cx="306" cy="153" rx="202" ry="127" fill="#EAF2FF"/>
+<g fill="none" stroke="#BED3F2" stroke-width="2"><path d="M65 221h435"/><path d="M94 92h22m-11-11v22M439 62h16m-8-8v16"/></g>
+<!-- Loose lecture sheets. -->
+<g transform="translate(76 104) rotate(-16)"><rect width="88" height="112" rx="9" fill="#FFF" stroke="#B5CBEB" stroke-width="2"/><rect x="12" y="14" width="64" height="36" rx="5" fill="#D6E6FF"/><path d="m23 40 12-13 13 10 13-14" fill="none" stroke="#6E9DDC" stroke-width="3"/><path d="M14 66h58M14 77h47M14 88h53" stroke="#C0D2EB" stroke-width="4" stroke-linecap="round"/></g>
+<g transform="translate(139 96) rotate(8)"><rect width="76" height="100" rx="8" fill="#FFF" stroke="#8CAFE0" stroke-width="2"/><rect x="12" y="15" width="52" height="29" rx="4" fill="#FFF0DB"/><path d="M13 59h49M13 70h40M13 81h46" stroke="#C0D2EB" stroke-width="4" stroke-linecap="round"/></g>
+<path d="M202 145q26-30 53-8" stroke="#719AD2" stroke-width="2" stroke-dasharray="4 6" fill="none"/><path d="m248 128 8 10-12 1" fill="none" stroke="#719AD2" stroke-width="2" stroke-linecap="round"/>
+<!-- Fox's folded tail and body. -->
+<path d="M385 216q87 11 86-87l-48 31-39 22Z" fill="#EF853E"/>
+<path d="m471 129-48 31 26 20q20-19 22-51Z" fill="#FFF4DF"/>
+<path d="m330 144 50-9 38 84H304Z" fill="#E57031"/>
+<!-- Face. -->
+<path d="m282 108-8-73 48 32h43l47-32-8 76-60 56Z" fill="#F18437"/>
+<path d="m274 35 48 32-40 41Z" fill="#D65C28"/><path d="m412 35-8 76-39-44Z" fill="#DB6729"/>
+<path d="m286 53 6 34 21-18Z" fill="#FFD9B5"/><path d="m400 53-7 34-22-18Z" fill="#FFD9B5"/>
+<path d="m282 108 27-14 35 44 34-44 26 17-60 56Z" fill="#FFF4DF"/>
+<path d="m322 67 22 71 21-71Z" fill="#FFAA55"/>
+<path d="m306 98 11 6m66-6-11 6" stroke="#18345B" stroke-width="5" stroke-linecap="round"/>
+<path d="m335 131 18 0-9 12Z" fill="#18345B"/>
+<!-- Neat, printable stack. -->
+<rect x="269" y="203" width="137" height="25" rx="6" fill="#A7C8F6"/>
+<rect x="261" y="194" width="137" height="25" rx="6" fill="#D9E8FF" stroke="#245AB0" stroke-width="2"/>
+<path d="M260 158h108l20 19v29H252v-40a8 8 0 0 1 8-8Z" fill="#FFF" stroke="#245AB0" stroke-width="2.5" stroke-linejoin="round"/>
+<path d="M368 158v19h20" fill="#D9E8FF" stroke="#245AB0" stroke-width="2"/>
+<g fill="#B5D2FF"><rect x="267" y="170" width="33" height="10" rx="2"/><rect x="309" y="170" width="33" height="10" rx="2"/><rect x="267" y="187" width="33" height="10" rx="2"/><rect x="309" y="187" width="33" height="10" rx="2"/></g>
+<!-- Paw aligns the paper edge. -->
+<path d="M389 132q28 8 24 37l-4 18q-4 12-19 7l-18-7q-10-6-5-15 4-7 14-3l7 3Z" fill="#F18437"/>
+<path d="m379 180 12 4m-7-12 12 4" stroke="#C45225" stroke-width="3" stroke-linecap="round"/>
+<g transform="translate(217 232)"><rect width="159" height="30" rx="15" fill="#FFF" stroke="#D6E4F7"/><circle cx="18" cy="15" r="8" fill="#E4F3EF"/><path d="m14 15 3 3 5-6" fill="none" stroke="#23846C" stroke-width="2" stroke-linecap="round"/><text x="34" y="20" font-family="Arial, sans-serif" font-size="12" fill="#31547E">Sorted. Set. Print.</text></g>
+</svg>

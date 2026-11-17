@@ -10,6 +10,7 @@ import os
 import pymupdf as fitz
 import pandas as pd
 import streamlit as st
+from src.branding import render_brand_header, render_upload_intro
 from src.database import Database
 from src.editor_state import apply_editor_changes
 from src.export_engine import export_print, export_csv, export_zip
@@ -20,9 +21,8 @@ from src.pdf_engine import PDFError, validate_pdf, safe_filename, open_pdf
 from src.preview_engine import generate_preview, render_preview_page
 from src.topic_extractor import extract_headings, suggested_topics, EXTRACTOR_VERSION
 
-st.set_page_config(page_title="ExamPrint AI", page_icon="📄", layout="wide")
-st.title("ExamPrint AI")
-st.caption("Offline lecture handouts · Separate, editable topic index · Duplex-ready A4")
+st.set_page_config(page_title="ExamPrint AI", page_icon="🦊", layout="wide")
+render_brand_header()
 st.html("""
 <style>
 [data-testid="stDownloadButton"] button:not(:disabled) {
@@ -90,9 +90,12 @@ tabs = st.tabs(["Upload & Configure", "Print Preview", "Editable Topic Index", "
                key="workflow_tab", on_change="rerun")
 
 with tabs[0]:
+    welcome = st.empty()
     uploaded = st.file_uploader("Lecture PDF", type=["pdf"], key=f'upload_{st.session_state.get("upload_epoch", 0)}')
     password = st.text_input("PDF password (if required)", type="password")
     if uploaded is None:
+        with welcome.container():
+            render_upload_intro()
         st.info("Upload a PDF to configure your handout.")
         next_tab("Print Preview", disabled=True)
         st.stop()
