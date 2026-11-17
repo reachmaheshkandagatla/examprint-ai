@@ -41,8 +41,7 @@ def render_brand_header():
     </style>''')
     logo, title = st.columns([1, 10], vertical_alignment="center")
     with logo:
-        st.button("Home — Upload & Configure", key="fox_home", on_click=go_home,
-                  help="Back to Upload & Configure. Your document and edits stay in place.")
+        st.button("Home — Upload & Configure", key="fox_home", on_click=go_home)
     with title:
         st.title("ExamPrint AI")
 
