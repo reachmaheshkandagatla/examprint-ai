@@ -22,7 +22,8 @@ def export_print(source_path, destination, settings, password=None, progress=Non
 def export_csv(entries, destination):
     with open(destination, "w", newline="", encoding="utf-8-sig") as stream:
         writer = csv.writer(stream)
-        writer.writerow(["Topic", "Printed Page", "Included", "Needs Review", "Session", "Type"])
+        group_label = "Group / Heading" if any(e.get("kind") in ("heading", "subtopic") for e in entries) else "Session"
+        writer.writerow(["Topic", "Printed Page", "Included", "Needs Review", group_label, "Type"])
         for entry in sorted(entries, key=index_sort_key):
             writer.writerow([entry["topic"], entry["printed_page_reference"], entry["included"], entry.get("needs_review", False), entry.get("section", ""), entry.get("kind", "topic")])
     return Path(destination)

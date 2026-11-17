@@ -3,9 +3,10 @@ from collections import Counter
 import re
 import pymupdf as fitz
 from .pdf_engine import open_pdf
+from .toc_index import extract_toc
 from .session_index import text_lines, session_on_page, outline_on_page, highlighted_topics, session_topics
 
-EXTRACTOR_VERSION = 3
+EXTRACTOR_VERSION = 4
 
 
 def normalize_topic(text):
@@ -17,6 +18,7 @@ def extract_headings(path, password=None, progress=None):
     candidates, edges, textless = [], Counter(), []
     plans, sessions, outlines = [], [], []
     with open_pdf(path, password) as doc:
+        toc = extract_toc(doc)
         for index, page in enumerate(doc):
             blocks = page.get_text("dict", flags=fitz.TEXTFLAGS_DICT & ~fitz.TEXT_PRESERVE_IMAGES)["blocks"]
             native_lines = text_lines(blocks)
@@ -63,7 +65,7 @@ def extract_headings(path, password=None, progress=None):
         total_pages = len(doc)
         threshold = max(3, total_pages * .35)
     return {"headings": [c for c in candidates if not (c["edge"] and edges[c["topic"].casefold()] >= threshold)],
-            "unavailable_pages": textless, "course_plans": plans,
+            "unavailable_pages": textless, "course_plans": plans, "toc": toc,
             "course_topics": course_plan_topics(plans, candidates),
             "sessions": sessions, "outlines": outlines,
             "session_topics": session_topics(sessions, plans, outlines, candidates, total_pages) if sessions else [],
@@ -141,6 +143,8 @@ def course_plan_topics(plans, headings):
 
 
 def suggested_topics(extraction, source="Auto", density="Balanced"):
+    if source == "Table of contents" or (source == "Auto" and extraction.get("toc", {}).get("topics") and not extraction.get("sessions")):
+        return extraction.get("toc", {}).get("topics", [])
     if source == "Sessions & course plans" or (source == "Auto" and extraction.get("sessions")):
         return extraction.get("session_topics", [])
     if source == "Course plans" or (source == "Auto" and extraction.get("course_plans")):

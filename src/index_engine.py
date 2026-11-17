@@ -59,8 +59,8 @@ def remap_entries(entries, slides_per_side):
 
 def validate_entries(entries, total_pages, require_review=True):
     for entry in entries:
-        if entry.get("kind", "topic") not in ("topic", "session"):
-            raise ValueError("Entry type must be session or topic.")
+        if entry.get("kind", "topic") not in ("topic", "session", "heading", "subtopic"):
+            raise ValueError("Entry type must be session, topic, heading, or subtopic.")
         if entry.get("kind") == "session" and not entry.get("section", "").strip():
             raise ValueError("Session headings need a Session label, such as Session 11.")
         if not entry["topic"].strip():
@@ -71,7 +71,7 @@ def validate_entries(entries, total_pages, require_review=True):
             except ValueError as exc:
                 raise ValueError(f"{entry['topic']!r}: {exc}") from exc
             if require_review and entry.get("needs_review"):
-                raise ValueError(f"Confirm the page reference and session assignment for {entry['topic']!r}, or exclude it from the index.")
+                raise ValueError(f"Confirm the page reference and group assignment for {entry['topic']!r}, or exclude it from the index.")
 
 
 def index_issues(entries, total_pages):
@@ -93,8 +93,8 @@ def merge_entries(entries, selected_ids, name, total_pages):
     selected = [e for e in entries if e["id"] in selected_ids]
     if len(selected) < 2 or not name.strip():
         raise ValueError("Select at least two topics and supply a merged topic name.")
-    if len({e.get("section", "") for e in selected}) > 1 or any(e.get("kind") == "session" for e in selected):
-        raise ValueError("Merge subtopics within one session; session headings remain separate.")
+    if len({e.get("section", "") for e in selected}) > 1 or any(e.get("kind") in ("session", "heading") for e in selected):
+        raise ValueError("Merge subtopics within one session or heading group; headings remain separate.")
     merged = dict(selected[0])
     merged.update(id=uuid4().hex, topic=name.strip(),
                   source_pages=sorted({p for e in selected for p in e["source_pages"]}),
@@ -111,10 +111,10 @@ def index_sort_key(entry):
     section = entry.get("section", "")
     number = re.match(r"Session\s+(\d+)", section, re.I)
     group = (0, int(number[1])) if number else (1, 0)
-    return (*group, section.casefold(), 0 if entry.get("kind") == "session" else 1, entry["topic"].casefold())
+    return (*group, section.casefold(), 0 if entry.get("kind") in ("session", "heading") else 1, entry["topic"].casefold())
 
 
-INDEX_FORMAT_VERSION = 2
+INDEX_FORMAT_VERSION = 3
 
 
 def _wrap_index_text(text, font, size, width):
@@ -168,7 +168,7 @@ def export_index(entries, destination, total_pages):
             page.insert_text((left, y), "No topics included.", fontname="IndexRegular", fontsize=size)
         for position, entry in enumerate(included):
             section = entry.get("section", "")
-            is_session = entry.get("kind") == "session"
+            is_session = entry.get("kind") in ("session", "heading")
             new_section = bool(section and section != previous_section)
             show_section = new_section and not is_session
             if new_section and previous_section is not None:

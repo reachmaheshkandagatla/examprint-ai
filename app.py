@@ -186,9 +186,9 @@ with tabs[1]:
     next_tab("Editable Topic Index")
 
 with tabs[2]:
-    st.caption("Topics use native text, font sizes, and heading-position heuristics. No semantic AI or OCR is used.")
-    index_source = st.selectbox("Index source", ["Auto", "Sessions & course plans", "Course plans", "Slide headings"])
-    st.caption("Auto prefers session headings with course-plan and agenda subtopics. Subtopics are matched within their session; next-session notices are ignored. Unmatched topics stay excluded for manual assignment.")
+    st.caption("Topics use PDF bookmarks, native text, font sizes, and heading-position heuristics. No semantic AI or OCR is used.")
+    index_source = st.selectbox("Index source", ["Auto", "Table of contents", "Sessions & course plans", "Course plans", "Slide headings"])
+    st.caption("Auto uses sessions when present, then a table of contents, then course plans or slide headings. Subtopics are matched within their session; next-session notices are ignored. Unmatched topics stay excluded for manual assignment.")
     density = st.selectbox("Index density (slide headings)", ["Compact", "Balanced", "Detailed"], index=1)
     refresh_topics = st.button("Extract / refresh suggested topics")
     if refresh_topics or st.session_state.extraction is None or st.session_state.get("extraction_version") != EXTRACTOR_VERSION:
@@ -215,6 +215,12 @@ with tabs[2]:
         st.warning(f'Native text extraction unavailable on {len(extraction["unavailable_pages"])} pages. Add their topics manually; OCR is not included.')
     if extraction:
         st.session_state.suggestions = make_entries(suggested_topics(extraction, index_source, density), settings.slides_per_side)
+        toc = extraction.get("toc", {})
+        if index_source == "Table of contents" or (index_source == "Auto" and toc.get("topics") and not extraction.get("sessions")):
+            st.caption(f"Found {len(toc.get('topics', []))} contents entries using {toc.get('method', 'contents pages')}. Main headings and indented subtopics share a group. Deeper levels are grouped beneath the main heading.")
+            st.info("Choose Use suggested index below to apply these suggestions. Existing edits are preserved until you replace them. Inferred page references need review.")
+            if not toc.get("topics"):
+                st.warning("No readable table of contents or PDF bookmarks found. Scanned contents need OCR, which is not supported; add entries manually or choose another index source.")
         plans = extraction.get("course_plans", [])
         if index_source != "Slide headings":
             st.caption(f"Found {len(plans)} course-plan slides and {len(extraction.get('course_topics', []))} unique plan topics.")
@@ -226,7 +232,7 @@ with tabs[2]:
         if unresolved:
             st.warning(f"{unresolved} topics could not be matched to lecture headings. Assign their printed pages, include them, and confirm review before exporting.")
         if st.session_state.suggestions:
-            st.caption("Use suggested index replaces the current session index. Saved changes remain available through Restore until you save again.")
+            st.caption("Use suggested index replaces the current index. Saved changes remain available through Restore until you save again.")
             if st.button("Use suggested index"):
                 revise(st.session_state.suggestions)
                 st.rerun()
@@ -234,7 +240,7 @@ with tabs[2]:
                 known = {(e.get("section", ""), e["topic"].casefold()) for e in st.session_state.entries}
                 revise(st.session_state.entries + [e for e in st.session_state.suggestions if (e.get("section", ""), e["topic"].casefold()) not in known])
     query = st.text_input("Search topics")
-    sort_alpha = st.checkbox("Sort topics alphabetically within sessions", value=True)
+    sort_alpha = st.checkbox("Sort topics alphabetically within groups", value=True)
     entries = st.session_state.entries
     visible = [e for e in entries if query.casefold() in (e.get("section", "") + " " + e["topic"]).casefold()]
     if sort_alpha:
@@ -252,7 +258,8 @@ with tabs[2]:
     editor_key = model["key"]
     st.data_editor(pd.DataFrame(rows, columns=["Included", "Printed Page", "Topic", "Session", "Type", "Needs Review"]),
                    key=editor_key, num_rows="dynamic", hide_index=True, disabled=["Needs Review"],
-                   column_config={"Type": st.column_config.SelectboxColumn(options=["session", "topic"], default="topic", required=True),
+                   column_config={"Session": st.column_config.TextColumn("Group / Heading"),
+                                  "Type": st.column_config.SelectboxColumn(options=["session", "topic", "heading", "subtopic"], default="topic", required=True),
                                   "Topic": st.column_config.TextColumn(required=True),
                                   "Printed Page": st.column_config.TextColumn(required=True, width="small"),
                                   "Included": st.column_config.CheckboxColumn(default=True)},
@@ -269,7 +276,7 @@ with tabs[2]:
             st.session_state.generate_valid_index = True
             st.rerun()
     if any(e["included"] and e.get("needs_review") for e in entries):
-        st.warning("Selected references or session assignments need review. Confirmation applies to entries with valid page references; invalid rows remain listed above.")
+        st.warning("Selected references or group assignments need review. Confirmation applies to entries with valid page references; invalid rows remain listed above.")
         if st.button("Confirm reviewed page references"):
             revise([{**e, "needs_review": False} if e["included"] and e["id"] not in invalid_ids else e for e in entries])
             st.rerun()
@@ -316,7 +323,8 @@ with tabs[2]:
             st.info("No saved index for this document.")
     with st.expander("Merge topics"):
         labels = {e["id"]: (e.get("section", "") + " / " if e.get("section") else "") + e["topic"] for e in entries}
-        selected = st.multiselect("Topics to merge", list(labels), format_func=labels.get)
+        selected = st.multiselect("Topics to merge", list(labels), format_func=labels.get,
+                                  key=f"merge_topics_{document_id}_{st.session_state.revision}")
         name = st.text_input("Merged topic name")
         if st.button("Merge selected topics"):
             try:
@@ -326,7 +334,8 @@ with tabs[2]:
                 st.error(str(exc))
     if entries:
         labels = {e["id"]: (e.get("section", "") + " / " if e.get("section") else "") + e["topic"] for e in entries}
-        selected_id = st.selectbox("Preview topic", list(labels), format_func=labels.get)
+        selected_id = st.selectbox("Preview topic", list(labels), format_func=labels.get,
+                                   key=f"preview_topic_{document_id}_{st.session_state.revision}")
         if st.button("Preview selected topic's printed page"):
             try:
                 selected_entry = next(e for e in entries if e["id"] == selected_id)
