@@ -49,7 +49,9 @@ def render_brand_header():
 
 def render_tab_banner(index):
     name, step, heading, description = BANNERS[index]
-    illustration = (ASSETS / f"fox-{name}.svg").read_text(encoding="utf-8")
+    # st.html uses an HTML-only sanitizer, which removes inline <svg> nodes.
+    # An image data URI preserves our local vector artwork through sanitization.
+    illustration_uri = "data:image/svg+xml;base64," + b64encode((ASSETS / f"fox-{name}.svg").read_bytes()).decode()
     st.html('''
     <style>
     .ep-banner {
@@ -66,7 +68,7 @@ def render_tab_banner(index):
         line-height: 1.2; letter-spacing: -.6px; padding: 0; margin: 0 0 12px; }
     .ep-banner p { color: #456080; max-width: 600px; font-size: 15px; line-height: 1.6; margin: 0; }
     .ep-banner-art { flex: 0 0 250px; margin-left: auto; }
-    .ep-banner-art svg { display: block; width: 100%; height: auto; }
+    .ep-banner-art img { display: block; width: 100%; height: auto; }
     @media (max-width: 640px) {
         .ep-banner { gap: 10px; padding: 20px 16px; flex-wrap: wrap; }
         .ep-banner-copy { flex-basis: 220px; }
@@ -79,6 +81,7 @@ def render_tab_banner(index):
         <h2>''' + heading + '''</h2>
         <p>''' + description + '''</p>
       </div>
-      <div class="ep-banner-art">''' + illustration + '''</div>
+      <div class="ep-banner-art"><img src="''' + illustration_uri + '''"
+        alt="Fox helping with ''' + name + '''" width="350" height="220"></div>
     </section>
     ''')
