@@ -23,6 +23,30 @@ from src.topic_extractor import extract_headings, suggested_topics, EXTRACTOR_VE
 st.set_page_config(page_title="ExamPrint AI", page_icon="📄", layout="wide")
 st.title("ExamPrint AI")
 st.caption("Offline lecture handouts · Separate, editable topic index · Duplex-ready A4")
+st.html("""
+<style>
+[data-testid="stDownloadButton"] button:not(:disabled) {
+    background-color: #2563eb;
+    border-color: #2563eb;
+    color: white;
+}
+[data-testid="stDownloadButton"] button:not(:disabled):hover {
+    background-color: #1d4ed8;
+    border-color: #1d4ed8;
+    color: white;
+}
+</style>
+""")
+
+
+def switch_tab(label):
+    st.session_state.workflow_tab = label
+
+
+def next_tab(label, disabled=False):
+    st.divider()
+    st.button(f"Next: {label} →", key=f"next_{label}",
+              on_click=switch_tab, args=(label,), disabled=disabled)
 
 
 def revise(entries):
@@ -62,13 +86,15 @@ if "workspace" not in st.session_state:
     st.session_state.workspace = TemporaryDirectory(prefix="examprint-")
 work = Path(st.session_state.workspace.name)
 db = Database(os.environ.get("EXAMPRINT_DB", "data/examprint.sqlite3"))
-tabs = st.tabs(["Upload & Configure", "Print Preview", "Editable Topic Index", "Export"])
+tabs = st.tabs(["Upload & Configure", "Print Preview", "Editable Topic Index", "Export"],
+               key="workflow_tab", on_change="rerun")
 
 with tabs[0]:
     uploaded = st.file_uploader("Lecture PDF", type=["pdf"], key=f'upload_{st.session_state.get("upload_epoch", 0)}')
     password = st.text_input("PDF password (if required)", type="password")
     if uploaded is None:
         st.info("Upload a PDF to configure your handout.")
+        next_tab("Print Preview", disabled=True)
         st.stop()
     limit = int(os.environ.get("EXAMPRINT_MAX_UPLOAD_MB", "250"))
     if uploaded.size > limit * 1024 * 1024:
@@ -131,6 +157,7 @@ with tabs[0]:
     if warning:
         st.warning(warning)
     st.caption("Layout controls above also apply to preview and export. Visible annotations are flattened; embedded PDF actions are not copied.")
+    next_tab("Print Preview")
 
 with tabs[1]:
     st.subheader("Three-side print preview")
@@ -156,6 +183,7 @@ with tabs[1]:
             column.image(render_preview_page(work / "Preview.pdf", offset, zoom))
     else:
         st.caption("Generate the preview for the current settings and starting slide. Only the selected three sides are processed.")
+    next_tab("Editable Topic Index")
 
 with tabs[2]:
     st.caption("Topics use native text, font sizes, and heading-position heuristics. No semantic AI or OCR is used.")
@@ -309,6 +337,8 @@ with tabs[2]:
             except (ValueError, RuntimeError) as exc:
                 st.error(str(exc))
 
+    next_tab("Export")
+
 with tabs[3]:
     st.caption("ExamPrint.pdf and ExamIndex.pdf remain separate. Cross-file index links depend on the PDF viewer; keep both files in the same folder.")
     export_sig = index_signature(meta, settings, st.session_state.entries)
@@ -334,8 +364,15 @@ with tabs[3]:
             st.session_state.zip_signature = export_sig if print_ready else None
         except (ValueError, RuntimeError, OSError) as exc:
             st.error(str(exc))
-    if st.session_state.export_signature == export_sig:
+    export_index_ready = (selected_count > 0 and st.session_state.export_signature == export_sig
+                          and (work / "ExamIndex.pdf").exists())
+    if export_index_ready:
         download("Download ExamIndex.pdf", work / "ExamIndex.pdf", "application/pdf", "index_download")
+    else:
+        st.download_button("Download ExamIndex.pdf", data=b"", file_name="ExamIndex.pdf",
+                           mime="application/pdf", key="index_download", disabled=True)
+        st.caption("Generate the index here or in Editable Topic Index to enable its PDF download.")
+    if export_index_ready:
         download("Download editable index CSV", work / "ExamIndex.csv", "text/csv", "csv_download")
         if print_ready:
             # Rebuild if the print PDF was generated after the index.

@@ -23,6 +23,11 @@ def test_upload_preview_export_save(pdf_factory, tmp_path, monkeypatch):
     app = AppTest.from_file("../app.py").run(timeout=20)
     assert not app.exception
     assert len(app.session_state.entries) == 10
+    for label in ["Print Preview", "Editable Topic Index", "Export"]:
+        button(app, f"Next: {label} →").click().run()
+        assert not app.exception
+        assert app.session_state.workflow_tab == label
+    assert next(d for d in app.get("download_button") if d.label == "Download ExamIndex.pdf").disabled
     button(app, "Generate / refresh preview").click().run()
     assert not app.exception
     assert app.session_state.preview_signature is not None
@@ -35,6 +40,7 @@ def test_upload_preview_export_save(pdf_factory, tmp_path, monkeypatch):
     button(app, "Generate index, CSV, and ZIP").click().run(timeout=20)
     assert not app.exception
     assert app.session_state.export_signature is not None
+    assert not next(d for d in app.get("download_button") if d.label == "Download ExamIndex.pdf").disabled
     next(s for s in app.selectbox if s.label == "Slides per side").set_value(6).run()
     assert not app.exception
     assert app.session_state.entries[6]["printed_page_reference"] == "2"
@@ -73,6 +79,7 @@ def test_selected_index_download_without_print_export(pdf_factory, tmp_path, mon
         text = "".join(page.get_text() for page in doc)
         assert "Topic 1" in text and "Topic 2" not in text
     assert any(d.label == "Download selected index PDF" for d in app.get("download_button"))
+    assert not next(d for d in app.get("download_button") if d.label == "Download ExamIndex.pdf").disabled
     # Editing a selection refreshes the PDF and keeps the download available.
     app.session_state.entries[1]["included"] = True
     app.run()
