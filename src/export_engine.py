@@ -6,12 +6,15 @@ from .pdf_engine import open_pdf, render_sides
 from .index_engine import index_sort_key
 
 
-def export_print(source_path, destination, settings, password=None, progress=None):
+def export_print(source_path, destination, settings, password=None, progress=None, status=None):
     destination = Path(destination)
     partial = destination.with_suffix(".partial.pdf")
     try:
         with open_pdf(source_path, password) as source, fitz.open() as output:
-            render_sides(source, output, settings, progress=progress)
+            render_progress = status.stage("Arranging slides on printed pages…", 0, .9) if status else progress
+            render_sides(source, output, settings, progress=render_progress)
+            if status:
+                status.stage("Compressing and saving the print PDF…", .9, .99)
             output.save(partial, deflate=True, garbage=1)
         partial.replace(destination)
     finally:

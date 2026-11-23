@@ -106,13 +106,17 @@ def highlighted_contents(pages):
             "ambiguous_pages": ambiguous, "method": "Highlighted contents slides"}
 
 
-def extract_toc(doc):
+def extract_toc(doc, progress=None):
     """Use active contents slides, then explicit destinations or proven offsets.
 
     Unmatched references stay empty unless at least two heading matches agree
     on a single offset. Offset-only matches still require review.
     """
-    pages = [page_rows(page) for page in doc]
+    pages = []
+    for index, page in enumerate(doc):
+        pages.append(page_rows(page))
+        if progress:
+            progress((index + 1) / len(doc))
     highlighted = highlighted_contents(pages)
     if highlighted["topics"] and any(topic["source_pages"] for topic in highlighted["topics"]):
         return highlighted

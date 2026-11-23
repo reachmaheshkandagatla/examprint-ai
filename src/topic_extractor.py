@@ -14,11 +14,13 @@ def normalize_topic(text):
     return text[:240]
 
 
-def extract_headings(path, password=None, progress=None):
+def extract_headings(path, password=None, progress=None, status=None):
     candidates, edges, textless = [], Counter(), []
     plans, sessions, outlines = [], [], []
     with open_pdf(path, password) as doc:
-        toc = extract_toc(doc)
+        toc_progress = status.stage("Scanning contents and bookmarks…", 0, .4) if status else None
+        toc = extract_toc(doc, toc_progress)
+        heading_progress = status.stage("Reading slide headings and course plans…", .4, .85) if status else None
         for index, page in enumerate(doc):
             blocks = page.get_text("dict", flags=fitz.TEXTFLAGS_DICT & ~fitz.TEXT_PRESERVE_IMAGES)["blocks"]
             native_lines = text_lines(blocks)
@@ -62,8 +64,12 @@ def extract_headings(path, password=None, progress=None):
             edges.update(page_edges)
             if progress:
                 progress((index + 1) / len(doc))
+            if heading_progress:
+                heading_progress((index + 1) / len(doc))
         total_pages = len(doc)
         threshold = max(3, total_pages * .35)
+    if status:
+        status.stage("Matching topics to sessions and pages…", .85, .95)
     return {"headings": [c for c in candidates if not (c["edge"] and edges[c["topic"].casefold()] >= threshold)],
             "unavailable_pages": textless, "course_plans": plans, "toc": toc,
             "course_topics": course_plan_topics(plans, candidates),

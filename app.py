@@ -12,6 +12,7 @@ import pandas as pd
 import streamlit as st
 from src.branding import render_brand_header, render_tab_banner
 from src.database import Database
+from src.progress import FoxProgress
 from src.editor_state import apply_editor_changes
 from src.export_engine import export_print, export_csv, export_zip
 from src.index_engine import (make_entries, remap_entries, validate_entries, parse_reference,
@@ -70,8 +71,10 @@ def index_signature(meta, settings, entries):
 
 
 def generate_index_files(entries, work, total_sides, signature):
-    export_index(entries, work / "ExamIndex.pdf", total_sides)
-    export_csv(entries, work / "ExamIndex.csv")
+    with FoxProgress("Generating the selected index PDF…") as progress:
+        export_index(entries, work / "ExamIndex.pdf", total_sides)
+        progress.stage("Writing the editable CSV…", .9, .99)
+        export_csv(entries, work / "ExamIndex.csv")
     st.session_state.export_signature = signature
     st.session_state.zip_signature = None
 
@@ -112,7 +115,8 @@ with tabs[0]:
                 path.unlink()
         source.write_bytes(uploaded.getbuffer())
         try:
-            meta = validate_pdf(source, limit * 1024 * 1024, password)
+            with FoxProgress("Validating PDF and checking its fingerprint…"):
+                meta = validate_pdf(source, limit * 1024 * 1024, password)
         except (PDFError, OSError, ValueError) as exc:
             st.error(str(exc))
             st.stop()
@@ -172,7 +176,8 @@ with tabs[1]:
     preview_sig = (meta["file_hash"], settings, first_side)
     if st.button("Generate / refresh preview", type="primary"):
         try:
-            generate_preview(source, work / "Preview.pdf", settings, st.session_state.start_slide, password)
+            with FoxProgress("Preparing the preview…") as progress:
+                generate_preview(source, work / "Preview.pdf", settings, st.session_state.start_slide, password, status=progress)
             st.session_state.preview_signature = preview_sig
         except (PDFError, ValueError, RuntimeError) as exc:
             st.error(str(exc))
@@ -193,24 +198,23 @@ with tabs[2]:
     density = st.selectbox("Index density (slide headings)", ["Compact", "Balanced", "Detailed"], index=1)
     refresh_topics = st.button("Extract / refresh suggested topics")
     if refresh_topics or st.session_state.extraction is None or st.session_state.get("extraction_version") != EXTRACTOR_VERSION:
-        progress = st.progress(0.0, text="Reading native PDF text…")
         try:
-            extraction = db.cached_extraction(document_id, EXTRACTOR_VERSION)
-            if extraction is None:
-                extraction = extract_headings(source, password, progress.progress)
-                db.cache_extraction(document_id, EXTRACTOR_VERSION, extraction)
-            st.session_state.extraction = extraction
-            st.session_state.extraction_version = EXTRACTOR_VERSION
-            proposed = make_entries(suggested_topics(extraction, index_source, density), settings.slides_per_side)
-            # Preserve all saved edits and deletions; density changes are explicit suggestions.
-            st.session_state.suggestions = proposed
-            if not st.session_state.entries and not st.session_state.has_saved_index:
-                revise(proposed)
-                st.session_state.has_saved_index = True
+            with FoxProgress("Checking saved document analysis…") as progress:
+                extraction = db.cached_extraction(document_id, EXTRACTOR_VERSION)
+                if extraction is None:
+                    extraction = extract_headings(source, password, status=progress)
+                    progress.stage("Saving extracted topics locally…", .95, .98)
+                    db.cache_extraction(document_id, EXTRACTOR_VERSION, extraction)
+                st.session_state.extraction = extraction
+                st.session_state.extraction_version = EXTRACTOR_VERSION
+                proposed = make_entries(suggested_topics(extraction, index_source, density), settings.slides_per_side)
+                # Preserve all saved edits and deletions; density changes are explicit suggestions.
+                st.session_state.suggestions = proposed
+                if not st.session_state.entries and not st.session_state.has_saved_index:
+                    revise(proposed)
+                    st.session_state.has_saved_index = True
         except (PDFError, ValueError, RuntimeError) as exc:
             st.error(str(exc))
-        finally:
-            progress.empty()
     extraction = st.session_state.extraction
     if extraction and extraction["unavailable_pages"]:
         st.warning(f'Native text extraction unavailable on {len(extraction["unavailable_pages"])} pages. Add their topics manually; OCR is not included.')
@@ -345,7 +349,8 @@ with tabs[2]:
             try:
                 selected_entry = next(e for e in entries if e["id"] == selected_id)
                 page_number = parse_reference(selected_entry["printed_page_reference"], total_sides)[0]
-                generate_preview(source, work / "TopicPreview.pdf", settings, (page_number - 1) * settings.slides_per_side + 1, password)
+                with FoxProgress("Preparing the topic preview…") as progress:
+                    generate_preview(source, work / "TopicPreview.pdf", settings, (page_number - 1) * settings.slides_per_side + 1, password, status=progress)
                 st.caption(f"Printed page {page_number}")
                 st.image(render_preview_page(work / "TopicPreview.pdf"))
             except (ValueError, RuntimeError) as exc:
@@ -356,15 +361,13 @@ with tabs[2]:
 with tabs[3]:
     export_sig = index_signature(meta, settings, st.session_state.entries)
     if st.button("Generate ExamPrint.pdf", type="primary"):
-        progress = st.progress(0.0, text="Generating printed sides…")
         try:
-            export_print(source, work / "ExamPrint.pdf", settings, password, progress.progress)
+            with FoxProgress("Preparing the print PDF…") as progress:
+                export_print(source, work / "ExamPrint.pdf", settings, password, status=progress)
             st.session_state.print_signature = (meta["file_hash"], settings)
             st.success("Print PDF ready.")
         except (PDFError, ValueError, RuntimeError, OSError) as exc:
             st.error(str(exc))
-        finally:
-            progress.empty()
     print_ready = st.session_state.get("print_signature") == (meta["file_hash"], settings) and (work / "ExamPrint.pdf").exists()
     if print_ready:
         download("Download ExamPrint.pdf", work / "ExamPrint.pdf", "application/pdf", "print_download")
@@ -372,7 +375,8 @@ with tabs[3]:
         try:
             generate_index_files(st.session_state.entries, work, total_sides, export_sig)
             if print_ready:
-                export_zip(work / "ExamPrint.pdf", work / "ExamIndex.pdf", work / "ExamPrint.zip")
+                with FoxProgress("Compressing both PDFs into a ZIP…"):
+                    export_zip(work / "ExamPrint.pdf", work / "ExamIndex.pdf", work / "ExamPrint.zip")
             st.session_state.export_signature = export_sig
             st.session_state.zip_signature = export_sig if print_ready else None
         except (ValueError, RuntimeError, OSError) as exc:
@@ -390,7 +394,8 @@ with tabs[3]:
         if print_ready:
             # Rebuild if the print PDF was generated after the index.
             if st.session_state.get("zip_signature") != export_sig:
-                export_zip(work / "ExamPrint.pdf", work / "ExamIndex.pdf", work / "ExamPrint.zip")
+                with FoxProgress("Compressing both PDFs into a ZIP…"):
+                    export_zip(work / "ExamPrint.pdf", work / "ExamIndex.pdf", work / "ExamPrint.zip")
                 st.session_state.zip_signature = export_sig
             download("Download both PDFs in ZIP", work / "ExamPrint.zip", "application/zip", "zip_download")
     if st.button("Clear session and temporary PDFs"):
