@@ -79,7 +79,7 @@ class Database:
     def restore(self, document_id):
         with self.connect() as conn:
             settings = conn.execute("SELECT * FROM layout_settings WHERE document_id=?", (document_id,)).fetchone()
-            rows = conn.execute("SELECT * FROM index_entries WHERE document_id=? ORDER BY topic COLLATE NOCASE", (document_id,)).fetchall()
+            rows = conn.execute("SELECT * FROM index_entries WHERE document_id=? ORDER BY rowid", (document_id,)).fetchall()
         entries = []
         for row in rows:
             entry = dict(row)

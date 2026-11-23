@@ -67,15 +67,15 @@ def download(label, path, mime, key):
         st.download_button(label, stream, file_name=Path(path).name, mime=mime, key=key)
 
 
-def index_signature(meta, settings, entries):
-    return sha256(json.dumps([INDEX_FORMAT_VERSION, meta["file_hash"], asdict(settings), entries], sort_keys=True).encode()).hexdigest()
+def index_signature(meta, settings, entries, sort_alpha):
+    return sha256(json.dumps([INDEX_FORMAT_VERSION, meta["file_hash"], asdict(settings), entries, sort_alpha], sort_keys=True).encode()).hexdigest()
 
 
-def generate_index_files(entries, work, total_sides, signature):
+def generate_index_files(entries, work, total_sides, signature, sort_alpha):
     with processing("Generating the selected index PDF…") as progress:
-        export_index(entries, work / "ExamIndex.pdf", total_sides)
+        export_index(entries, work / "ExamIndex.pdf", total_sides, sort_alpha=sort_alpha)
         progress.stage("Writing the editable CSV…", .9, .99)
-        export_csv(entries, work / "ExamIndex.csv")
+        export_csv(entries, work / "ExamIndex.csv", sort_alpha=sort_alpha)
     st.session_state.export_signature = signature
     st.session_state.zip_signature = None
 
@@ -304,6 +304,8 @@ with tabs[2]:
                 revise(st.session_state.entries + [e for e in st.session_state.suggestions if (e.get("section", ""), e["topic"].casefold()) not in known])
     query = st.text_input("Search topics")
     sort_alpha = st.checkbox("Sort topics alphabetically within groups", value=True)
+    st.caption("Applies to the editor, index PDF, and CSV. Numbers sort naturally (1, 2, …, 10). "
+               "Turn sorting off to keep the extraction/saved entry order.")
     entries = st.session_state.entries
     visible = [e for e in entries if query.casefold() in (e.get("section", "") + " " + e["topic"]).casefold()]
     if sort_alpha:
@@ -346,14 +348,14 @@ with tabs[2]:
     st.subheader("Download selected index")
     selected_count = sum(e["included"] for e in st.session_state.entries)
     st.caption(f"{selected_count} entries selected via Included. The PDF includes all selected entries, even when search hides some rows. Saving or generating the lecture PDF is not required.")
-    current_index_sig = index_signature(meta, settings, st.session_state.entries)
+    current_index_sig = index_signature(meta, settings, st.session_state.entries, sort_alpha)
     generate_clicked = st.button("Generate selected index PDF", type="primary", disabled=selected_count == 0)
     generate_clicked = st.session_state.pop("generate_valid_index", False) or generate_clicked
     refresh_needed = bool(st.session_state.export_signature) and (
         st.session_state.export_signature != current_index_sig or not (work / "ExamIndex.pdf").exists())
     if selected_count and (generate_clicked or refresh_needed):
         try:
-            generate_index_files(st.session_state.entries, work, total_sides, current_index_sig)
+            generate_index_files(st.session_state.entries, work, total_sides, current_index_sig, sort_alpha)
             if generate_clicked:
                 st.success("Your selected index is ready. Download ExamIndex.pdf below.")
         except (ValueError, RuntimeError, OSError) as exc:
@@ -413,7 +415,7 @@ with tabs[2]:
     next_tab("Export")
 
 with tabs[3]:
-    export_sig = index_signature(meta, settings, st.session_state.entries)
+    export_sig = index_signature(meta, settings, st.session_state.entries, sort_alpha)
     if st.button("Generate ExamPrint.pdf", type="primary"):
         try:
             with processing("Preparing the print PDF…") as progress:
@@ -427,7 +429,7 @@ with tabs[3]:
         download("Download ExamPrint.pdf", work / "ExamPrint.pdf", "application/pdf", "print_download")
     if st.button("Generate index, CSV, and ZIP"):
         try:
-            generate_index_files(st.session_state.entries, work, total_sides, export_sig)
+            generate_index_files(st.session_state.entries, work, total_sides, export_sig, sort_alpha)
             if print_ready:
                 with processing("Compressing both PDFs into a ZIP…"):
                     export_zip(work / "ExamPrint.pdf", work / "ExamIndex.pdf", work / "ExamPrint.zip")

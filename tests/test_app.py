@@ -175,3 +175,36 @@ def test_one_slide_index_only_and_tab_status(pdf_factory, tmp_path, monkeypatch)
     button(app, "Restore saved changes").click().run()
     assert not app.exception and not app.error
     assert app.session_state.layout.slides_per_side == 1
+
+
+def test_sort_toggle_regenerates_pdf_and_csv(pdf_factory, tmp_path, monkeypatch):
+    from pathlib import Path
+    import csv
+    import pymupdf as fitz
+    from src.index_engine import make_entries
+    uploaded = BytesIO(pdf_factory(3).read_bytes())
+    uploaded.name, uploaded.file_id, uploaded.size = "order.pdf", "sort-order", len(uploaded.getbuffer())
+    monkeypatch.setattr(st, "file_uploader", lambda *args, **kwargs: uploaded)
+    monkeypatch.setenv("EXAMPRINT_DB", str(tmp_path / "sort.sqlite"))
+    app = AppTest.from_file("../app.py").run(timeout=20)
+    titles = ["10. Optimization", "2. Vectors", "1. Systems"]
+    app.session_state.entries = make_entries([{"topic": title, "source_pages": [i]} for i, title in enumerate(titles)], 3)
+    app.run()
+    button(app, "Generate selected index PDF").click().run()
+    work = Path(app.session_state.workspace.name)
+    def check_order(expected):
+        assert not app.exception and not app.error
+        with fitz.open(work / "ExamIndex.pdf") as doc:
+            text = doc[0].get_text()
+            assert sorted(expected, key=text.index) == expected
+        with open(work / "ExamIndex.csv", encoding="utf-8-sig", newline="") as stream:
+            assert [row[0] for row in list(csv.reader(stream))[1:]] == expected
+    check_order(list(reversed(titles)))
+    signature = app.session_state.export_signature
+    next(c for c in app.checkbox if c.label == "Sort topics alphabetically within groups").uncheck().run()
+    assert app.session_state.export_signature != signature
+    check_order(titles)
+    button(app, "Generate index, CSV, and ZIP").click().run()
+    check_order(titles)
+    next(c for c in app.checkbox if c.label == "Sort topics alphabetically within groups").check().run()
+    check_order(list(reversed(titles)))

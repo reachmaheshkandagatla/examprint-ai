@@ -36,7 +36,7 @@ def test_manual_persistence_and_remapping(tmp_path):
     assert next(e for e in remapped if e["topic"] == "Renamed")["needs_review"]
     assert next(e for e in remapped if e["topic"] == "Auto")["printed_page_reference"] == "2"
     db.save(doc_id, LayoutSettings(6), remapped)
-    assert db.restore(doc_id)[1] == sorted(remapped, key=lambda e: e["topic"])
+    assert db.restore(doc_id)[1] == remapped
 
 
 def test_review_blocks_index():
@@ -147,3 +147,35 @@ def test_legacy_layout_migration_preserves_saved_work(tmp_path):
     assert one_slide[0]["printed_page_reference"] == "1, 4, 7"
     migrated.save(doc_id, LayoutSettings(slides_per_side=1), one_slide)
     assert Database(path).restore(doc_id) == (LayoutSettings(slides_per_side=1), one_slide)
+
+
+@pytest.mark.parametrize("sort_alpha", [True, False])
+def test_numbered_topic_order_in_pdf_csv_and_restore(tmp_path, sort_alpha):
+    import csv
+    from src.export_engine import export_csv
+    titles = ["10. Optimization", "2. Vector Spaces", "1. Linear equations", "11. More optimization"]
+    entries = make_entries([{"topic": title, "source_pages": [i]} for i, title in enumerate(titles)], 1)
+    expected = [titles[i] for i in (2, 1, 0, 3)] if sort_alpha else titles
+    pdf = export_index(entries, tmp_path / "ordered.pdf", 4, sort_alpha=sort_alpha)
+    with fitz.open(pdf) as doc:
+        text = doc[0].get_text()
+        assert sorted(expected, key=text.index) == expected
+    path = export_csv(entries, tmp_path / "ordered.csv", sort_alpha=sort_alpha)
+    with open(path, encoding="utf-8-sig", newline="") as stream:
+        assert [row[0] for row in list(csv.reader(stream))[1:]] == expected
+    db = Database(tmp_path / "ordered.sqlite")
+    document = db.register("ordered.pdf", "order", 4)
+    db.save(document, LayoutSettings(slides_per_side=1), entries)
+    assert [e["topic"] for e in db.restore(document)[1]] == titles
+
+
+def test_natural_group_and_subtopic_order():
+    from src.index_engine import index_sort_key
+    entries = [
+        {"topic": "Topic 10", "section": "Chapter 2"},
+        {"topic": "Chapter 10", "section": "Chapter 10", "kind": "heading"},
+        {"topic": "Topic 2", "section": "Chapter 2"},
+        {"topic": "Chapter 2", "section": "Chapter 2", "kind": "heading"},
+    ]
+    assert [e["topic"] for e in sorted(entries, key=index_sort_key)] == [
+        "Chapter 2", "Topic 2", "Topic 10", "Chapter 10"]

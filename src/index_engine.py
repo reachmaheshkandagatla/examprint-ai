@@ -107,14 +107,20 @@ def merge_entries(entries, selected_ids, name, total_pages):
     return [e for e in entries if e["id"] not in selected_ids] + [merged]
 
 
+def natural_text_key(text):
+    """Compare digit runs as numbers: Topic 2 precedes Topic 10."""
+    return tuple((1, int(part)) if part.isdecimal() else (0, part)
+                 for part in re.split(r"(\d+)", text.casefold()))
+
+
 def index_sort_key(entry):
     section = entry.get("section", "")
     number = re.match(r"Session\s+(\d+)", section, re.I)
     group = (0, int(number[1])) if number else (1, 0)
-    return (*group, section.casefold(), 0 if entry.get("kind") in ("session", "heading") else 1, entry["topic"].casefold())
+    return (*group, natural_text_key(section), 0 if entry.get("kind") in ("session", "heading") else 1, natural_text_key(entry["topic"]))
 
 
-INDEX_FORMAT_VERSION = 3
+INDEX_FORMAT_VERSION = 4
 
 
 def _wrap_index_text(text, font, size, width):
@@ -135,8 +141,10 @@ def _wrap_index_text(text, font, size, width):
     return lines + ([line] if line else []) or [""]
 
 
-def export_index(entries, destination, total_pages):
-    included = sorted((e for e in entries if e["included"]), key=index_sort_key)
+def export_index(entries, destination, total_pages, sort_alpha=True):
+    included = [e for e in entries if e["included"]]
+    if sort_alpha:
+        included.sort(key=index_sort_key)
     validate_entries(included, total_pages)
     regular, bold, fallback = fitz.Font("helv"), fitz.Font("hebo"), fitz.Font("cjk")
     left, right, bottom = 42, 553, 790
