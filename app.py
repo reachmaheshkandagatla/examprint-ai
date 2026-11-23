@@ -12,6 +12,7 @@ import pandas as pd
 import streamlit as st
 from src.branding import render_brand_header, render_tab_banner
 from src.database import Database
+from src.custom_index import extract_custom_topics
 from src.progress import FoxProgress, progress_html
 from src.editor_state import apply_editor_changes
 from src.export_engine import export_print, export_csv, export_zip
@@ -213,11 +214,16 @@ with tabs[1]:
     next_tab("Editable Topic Index")
 
 with tabs[2]:
-    index_source = st.selectbox("Index source", ["Auto", "Table of contents", "Sessions & course plans", "Course plans", "Slide headings"])
+    index_source = st.selectbox("Index source", ["Auto", "Table of contents", "Sessions & course plans", "Course plans", "Slide headings", "Custom"])
     st.caption("Auto uses sessions when present, then a table of contents, then course plans or slide headings. Subtopics are matched within their session; next-session notices are ignored. Unmatched topics stay excluded for manual assignment.")
     density = st.selectbox("Index density (slide headings)", ["Compact", "Balanced", "Detailed"], index=1)
-    refresh_topics = st.button("Extract / refresh suggested topics")
-    if refresh_topics or st.session_state.extraction is None or st.session_state.get("extraction_version") != EXTRACTOR_VERSION:
+    custom_marker = ""
+    if index_source == "Custom":
+        custom_marker = st.text_input("Custom topic marker", value="Topic:", key="custom_topic_marker").strip()
+        st.caption("Example: Topic: Neural Networks → Neural Networks. Matches ignore letter case and use literal text, "
+                   "not regex. Titles must follow the marker on the same line. Repeated titles combine their matching pages.")
+    refresh_topics = st.button("Extract / refresh suggested topics", disabled=index_source == "Custom" and not custom_marker)
+    if index_source != "Custom" and (refresh_topics or st.session_state.extraction is None or st.session_state.get("extraction_version") != EXTRACTOR_VERSION):
         try:
             with processing("Checking saved document analysis…") as progress:
                 extraction = db.cached_extraction(document_id, EXTRACTOR_VERSION)
@@ -236,10 +242,38 @@ with tabs[2]:
         except (PDFError, ValueError, RuntimeError) as exc:
             st.error(str(exc))
     extraction = st.session_state.extraction
+    if index_source == "Custom":
+        extraction = None
+        st.session_state.suggestions = []
+        if not custom_marker:
+            st.info("Enter a custom marker, such as Topic:, to find topics in your PDF.")
+        else:
+            custom_signature = (meta["file_hash"], custom_marker)
+            cached_custom = st.session_state.get("custom_extraction")
+            try:
+                if refresh_topics or not cached_custom or cached_custom[0] != custom_signature:
+                    with processing("Extracting custom index topics…") as progress:
+                        result = extract_custom_topics(source, custom_marker, password, status=progress)
+                        st.session_state.custom_extraction = (custom_signature, result)
+                extraction = st.session_state.custom_extraction[1]
+            except (PDFError, ValueError, RuntimeError, OSError) as exc:
+                st.error(str(exc))
     if extraction and extraction["unavailable_pages"]:
         st.warning(f'Native text extraction unavailable on {len(extraction["unavailable_pages"])} pages. Add their topics manually; OCR is not included.')
     if extraction:
         st.session_state.suggestions = make_entries(suggested_topics(extraction, index_source, density), settings.slides_per_side)
+        if index_source == "Custom":
+            count = len(st.session_state.suggestions)
+            st.caption(f"Found {count} custom topics. Page references use {settings.slides_per_side} slide(s) per side.")
+            if not count:
+                st.warning("No topic titles found after this marker. Check the marker text and that titles follow it on the same line. "
+                           "Scanned image-only pages need manual entries; OCR is not included.")
+            else:
+                st.dataframe(pd.DataFrame([{"Topic": e["topic"], "Printed Page": e["printed_page_reference"]}
+                                           for e in st.session_state.suggestions]), hide_index=True, use_container_width=True)
+                st.info("Review these matches, then choose Use suggested index to apply them. Your current index stays unchanged until you apply or add suggestions.")
+            if extraction.get("empty_matches"):
+                st.warning(f"Skipped {extraction['empty_matches']} marker(s) without a title on the same line.")
         toc = extraction.get("toc", {})
         if index_source == "Table of contents" or (index_source == "Auto" and toc.get("topics") and not extraction.get("sessions")):
             st.caption(f"Found {len(toc.get('topics', []))} contents entries using {toc.get('method', 'contents pages')}. Main headings and indented subtopics share a group. Deeper levels are grouped beneath the main heading.")
@@ -251,7 +285,7 @@ with tabs[2]:
             if not toc.get("topics"):
                 st.warning("No readable table of contents or PDF bookmarks found. Scanned contents need OCR, which is not supported; add entries manually or choose another index source.")
         plans = extraction.get("course_plans", [])
-        if index_source != "Slide headings":
+        if index_source not in ("Slide headings", "Custom"):
             st.caption(f"Found {len(plans)} course-plan slides and {len(extraction.get('course_topics', []))} unique plan topics.")
         if extraction.get("sessions") and index_source in ("Auto", "Sessions & course plans"):
             st.caption(f"Found {len(extraction['sessions'])} session headings. Grouped sessions share one start page; subtopics are grouped beneath them.")

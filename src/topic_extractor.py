@@ -149,6 +149,8 @@ def course_plan_topics(plans, headings):
 
 
 def suggested_topics(extraction, source="Auto", density="Balanced"):
+    if source == "Custom":
+        return extraction.get("custom_topics", [])
     if source == "Table of contents" or (source == "Auto" and extraction.get("toc", {}).get("topics") and not extraction.get("sessions")):
         return extraction.get("toc", {}).get("topics", [])
     if source == "Sessions & course plans" or (source == "Auto" and extraction.get("sessions")):
