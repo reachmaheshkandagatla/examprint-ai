@@ -119,3 +119,31 @@ def test_professional_index_alignment_and_leaders(tmp_path):
             ref = next(s for s in refs if abs(s["origin"][1] - leader["origin"][1]) < .1)
             assert leader["bbox"][2] < ref["bbox"][0]
         assert len(doc[0].get_links()) == 3
+
+
+def test_legacy_layout_migration_preserves_saved_work(tmp_path):
+    import sqlite3
+    path = tmp_path / "legacy.sqlite"
+    db = Database(path)
+    doc_id = db.register("lecture.pdf", "legacy", 7)
+    entries = make_entries([{"topic": "Saved topic", "source_pages": [0, 3, 6]}], 3)
+    db.save(doc_id, LayoutSettings(), entries)
+    db.cache_extraction(doc_id, 5, {"headings": []})
+    # Recreate the exact pre-one-slide constraint, retaining the saved rows.
+    with sqlite3.connect(path) as conn:
+        conn.executescript('''
+            ALTER TABLE layout_settings RENAME TO legacy_layout;
+            CREATE TABLE layout_settings (
+                document_id INTEGER PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+                slides_per_side INTEGER NOT NULL CHECK(slides_per_side IN (2,3,4,6)),
+                paper_size TEXT NOT NULL, orientation TEXT NOT NULL, margin REAL NOT NULL, spacing REAL NOT NULL);
+            INSERT INTO layout_settings SELECT * FROM legacy_layout;
+            DROP TABLE legacy_layout;
+        ''')
+    migrated = Database(path)
+    assert migrated.restore(doc_id) == (LayoutSettings(), entries)
+    assert migrated.cached_extraction(doc_id, 5) == {"headings": []}
+    one_slide = remap_entries(entries, 1)
+    assert one_slide[0]["printed_page_reference"] == "1, 4, 7"
+    migrated.save(doc_id, LayoutSettings(slides_per_side=1), one_slide)
+    assert Database(path).restore(doc_id) == (LayoutSettings(slides_per_side=1), one_slide)

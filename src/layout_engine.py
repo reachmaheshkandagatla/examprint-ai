@@ -16,8 +16,8 @@ class LayoutSettings:
     spacing: float = 4.0
 
     def __post_init__(self):
-        if self.slides_per_side not in (2, 3, 4, 6):
-            raise ValueError("Choose 2, 3, 4, or 6 slides per side.")
+        if self.slides_per_side not in (1, 2, 3, 4, 6):
+            raise ValueError("Choose 1, 2, 3, 4, or 6 slides per side.")
         if self.paper_size != "A4" or self.orientation not in ("Portrait", "Landscape"):
             raise ValueError("Unsupported paper size or orientation.")
         if not 0 <= self.margin <= 40 or not 0 <= self.spacing <= 30:
@@ -31,7 +31,7 @@ class LayoutSettings:
 
     def slots(self):
         width, height = self.page_size
-        columns = 1 if self.slides_per_side in (2, 3) else 2
+        columns = 1 if self.slides_per_side in (1, 2, 3) else 2
         rows = self.slides_per_side // columns
         margin, gap = self.margin * MM, self.spacing * MM
         cell_w = (width - 2 * margin - (columns - 1) * gap) / columns
@@ -54,7 +54,7 @@ def fit_rect(source, target):
 
 
 def printed_page(original_index, slides_per_side):
-    if original_index < 0 or slides_per_side not in (2, 3, 4, 6):
+    if original_index < 0 or slides_per_side not in (1, 2, 3, 4, 6):
         raise ValueError("Invalid page mapping.")
     return original_index // slides_per_side + 1
 

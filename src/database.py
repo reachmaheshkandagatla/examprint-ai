@@ -19,7 +19,7 @@ class Database:
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
                 CREATE TABLE IF NOT EXISTS layout_settings (
                     document_id INTEGER PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
-                    slides_per_side INTEGER NOT NULL CHECK(slides_per_side IN (2,3,4,6)),
+                    slides_per_side INTEGER NOT NULL CHECK(slides_per_side IN (1,2,3,4,6)),
                     paper_size TEXT NOT NULL, orientation TEXT NOT NULL, margin REAL NOT NULL, spacing REAL NOT NULL);
                 CREATE TABLE IF NOT EXISTS index_entries (
                     id TEXT PRIMARY KEY, document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
@@ -32,6 +32,18 @@ class Database:
                     document_id INTEGER PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
                     version INTEGER NOT NULL, payload TEXT NOT NULL);
             ''')
+            # SQLite cannot alter a CHECK constraint. Rebuild only the layout
+            # table in a transaction, preserving saved layouts and document IDs.
+            conn.execute("BEGIN IMMEDIATE")
+            schema = conn.execute("SELECT sql FROM sqlite_master WHERE name='layout_settings'").fetchone()[0]
+            if "IN(2,3,4,6)" in "".join(schema.upper().split()):
+                conn.execute("""CREATE TABLE layout_settings_v2 (
+                    document_id INTEGER PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+                    slides_per_side INTEGER NOT NULL CHECK(slides_per_side IN (1,2,3,4,6)),
+                    paper_size TEXT NOT NULL, orientation TEXT NOT NULL, margin REAL NOT NULL, spacing REAL NOT NULL)""")
+                conn.execute("INSERT INTO layout_settings_v2 SELECT * FROM layout_settings")
+                conn.execute("DROP TABLE layout_settings")
+                conn.execute("ALTER TABLE layout_settings_v2 RENAME TO layout_settings")
             columns = {row[1] for row in conn.execute("PRAGMA table_info(index_entries)")}
             for name, default in (("section", ""), ("kind", "topic")):
                 if name not in columns:

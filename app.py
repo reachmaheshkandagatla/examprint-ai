@@ -12,7 +12,7 @@ import pandas as pd
 import streamlit as st
 from src.branding import render_brand_header, render_tab_banner
 from src.database import Database
-from src.progress import FoxProgress
+from src.progress import FoxProgress, progress_html
 from src.editor_state import apply_editor_changes
 from src.export_engine import export_print, export_csv, export_zip
 from src.index_engine import (make_entries, remap_entries, validate_entries, parse_reference,
@@ -71,7 +71,7 @@ def index_signature(meta, settings, entries):
 
 
 def generate_index_files(entries, work, total_sides, signature):
-    with FoxProgress("Generating the selected index PDF…") as progress:
+    with processing("Generating the selected index PDF…") as progress:
         export_index(entries, work / "ExamIndex.pdf", total_sides)
         progress.stage("Writing the editable CSV…", .9, .99)
         export_csv(entries, work / "ExamIndex.csv")
@@ -91,9 +91,24 @@ work = Path(st.session_state.workspace.name)
 db = Database(os.environ.get("EXAMPRINT_DB", "data/examprint.sqlite3"))
 tabs = st.tabs(["Upload & Configure", "Print Preview", "Editable Topic Index", "Export"],
                key="workflow_tab", on_change="rerun")
+
+
+def remember_processing(markup):
+    st.session_state.processing_status = markup
+
+
+def processing(label):
+    return FoxProgress(label, slots=progress_slots, on_update=remember_processing)
+
+
+progress_slots = []
 for index, tab in enumerate(tabs):
     with tab:
         render_tab_banner(index)
+        slot = st.empty()
+        slot.html(st.session_state.get("processing_status", progress_html(
+            0, "Ready when you are", "Processing updates will appear here in every tab.", "idle")))
+        progress_slots.append(slot)
 
 with tabs[0]:
     uploaded = st.file_uploader("Lecture PDF", type=["pdf"], key=f'upload_{st.session_state.get("upload_epoch", 0)}')
@@ -115,7 +130,7 @@ with tabs[0]:
                 path.unlink()
         source.write_bytes(uploaded.getbuffer())
         try:
-            with FoxProgress("Validating PDF and checking its fingerprint…"):
+            with processing("Validating PDF and checking its fingerprint…"):
                 meta = validate_pdf(source, limit * 1024 * 1024, password)
         except (PDFError, OSError, ValueError) as exc:
             st.error(str(exc))
@@ -139,8 +154,13 @@ with tabs[0]:
     col3.caption(safe_filename(uploaded.name))
     cols = st.columns(3)
     cols[0].selectbox("Paper", ["A4"], key="paper_size")
-    cols[1].selectbox("Slides per side", [2, 3, 4, 6], key="slides_per_side")
+    cols[1].selectbox("Slides per side", [1, 2, 3, 4, 6], key="slides_per_side")
     cols[2].selectbox("Orientation", ["Portrait", "Landscape"], key="orientation")
+    if st.session_state.slides_per_side == 1:
+        st.info("1 slide per side: index references match original PDF page positions (PDF page 12 → index page 12). "
+                "You can go straight to Editable Topic Index and download the index without generating a preview or lecture PDF. "
+                "Page numbers printed inside the document may differ.")
+        st.button("Go straight to Editable Topic Index →", on_click=switch_tab, args=("Editable Topic Index",))
     cols = st.columns(2)
     cols[0].number_input("Margins (mm)", min_value=0.0, max_value=40.0, step=1.0, key="margin")
     cols[1].number_input("Slide spacing (mm)", min_value=0.0, max_value=30.0, step=1.0, key="spacing")
@@ -176,7 +196,7 @@ with tabs[1]:
     preview_sig = (meta["file_hash"], settings, first_side)
     if st.button("Generate / refresh preview", type="primary"):
         try:
-            with FoxProgress("Preparing the preview…") as progress:
+            with processing("Preparing the preview…") as progress:
                 generate_preview(source, work / "Preview.pdf", settings, st.session_state.start_slide, password, status=progress)
             st.session_state.preview_signature = preview_sig
         except (PDFError, ValueError, RuntimeError) as exc:
@@ -199,7 +219,7 @@ with tabs[2]:
     refresh_topics = st.button("Extract / refresh suggested topics")
     if refresh_topics or st.session_state.extraction is None or st.session_state.get("extraction_version") != EXTRACTOR_VERSION:
         try:
-            with FoxProgress("Checking saved document analysis…") as progress:
+            with processing("Checking saved document analysis…") as progress:
                 extraction = db.cached_extraction(document_id, EXTRACTOR_VERSION)
                 if extraction is None:
                     extraction = extract_headings(source, password, status=progress)
@@ -349,7 +369,7 @@ with tabs[2]:
             try:
                 selected_entry = next(e for e in entries if e["id"] == selected_id)
                 page_number = parse_reference(selected_entry["printed_page_reference"], total_sides)[0]
-                with FoxProgress("Preparing the topic preview…") as progress:
+                with processing("Preparing the topic preview…") as progress:
                     generate_preview(source, work / "TopicPreview.pdf", settings, (page_number - 1) * settings.slides_per_side + 1, password, status=progress)
                 st.caption(f"Printed page {page_number}")
                 st.image(render_preview_page(work / "TopicPreview.pdf"))
@@ -362,7 +382,7 @@ with tabs[3]:
     export_sig = index_signature(meta, settings, st.session_state.entries)
     if st.button("Generate ExamPrint.pdf", type="primary"):
         try:
-            with FoxProgress("Preparing the print PDF…") as progress:
+            with processing("Preparing the print PDF…") as progress:
                 export_print(source, work / "ExamPrint.pdf", settings, password, status=progress)
             st.session_state.print_signature = (meta["file_hash"], settings)
             st.success("Print PDF ready.")
@@ -375,7 +395,7 @@ with tabs[3]:
         try:
             generate_index_files(st.session_state.entries, work, total_sides, export_sig)
             if print_ready:
-                with FoxProgress("Compressing both PDFs into a ZIP…"):
+                with processing("Compressing both PDFs into a ZIP…"):
                     export_zip(work / "ExamPrint.pdf", work / "ExamIndex.pdf", work / "ExamPrint.zip")
             st.session_state.export_signature = export_sig
             st.session_state.zip_signature = export_sig if print_ready else None
@@ -394,7 +414,7 @@ with tabs[3]:
         if print_ready:
             # Rebuild if the print PDF was generated after the index.
             if st.session_state.get("zip_signature") != export_sig:
-                with FoxProgress("Compressing both PDFs into a ZIP…"):
+                with processing("Compressing both PDFs into a ZIP…"):
                     export_zip(work / "ExamPrint.pdf", work / "ExamIndex.pdf", work / "ExamPrint.zip")
                 st.session_state.zip_signature = export_sig
             download("Download both PDFs in ZIP", work / "ExamPrint.zip", "application/zip", "zip_download")

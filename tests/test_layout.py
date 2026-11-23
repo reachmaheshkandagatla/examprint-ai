@@ -23,7 +23,7 @@ def test_page_counts(pdf_factory, tmp_path, count, expected):
     assert page_counts(count, LayoutSettings()) == (expected, (expected + 1) // 2)
 
 
-@pytest.mark.parametrize("per_side", [2, 3, 4, 6])
+@pytest.mark.parametrize("per_side", [1, 2, 3, 4, 6])
 @pytest.mark.parametrize("orientation", ["Portrait", "Landscape"])
 def test_aspect_and_containment(per_side, orientation):
     for original in (fitz.Rect(0, 0, 960, 540), fitz.Rect(0, 0, 400, 650)):
@@ -40,3 +40,16 @@ def test_mixed_orientation(pdf_factory, tmp_path):
         text = "".join(p.get_text() for p in doc)
         assert all(f"Topic {i}" in text for i in range(1, 8))
         assert text.count("WATERMARK") == 7
+
+
+def test_one_slide_export_and_mapping(pdf_factory, tmp_path):
+    from src.layout_engine import printed_page
+    settings = LayoutSettings(slides_per_side=1)
+    assert len(settings.slots()) == 1
+    assert page_counts(7, settings) == (7, 4)
+    assert [printed_page(i, 1) for i in range(7)] == list(range(1, 8))
+    output = export_print(pdf_factory(7), tmp_path / "one-slide.pdf", settings)
+    with fitz.open(output) as doc:
+        assert len(doc) == 7
+        for index, page in enumerate(doc):
+            assert f"Topic {index + 1}" in page.get_text()

@@ -145,3 +145,33 @@ def test_review_with_missing_pages_then_download_valid_entries(pdf_factory, tmp_
     with fitz.open(Path(app.session_state.workspace.name) / "ExamIndex.pdf") as doc:
         text = doc[0].get_text()
         assert "Topic 1" in text and "Topic 2" not in text and "Topic 3" not in text
+
+
+def test_one_slide_index_only_and_tab_status(pdf_factory, tmp_path, monkeypatch):
+    from pathlib import Path
+    import pymupdf as fitz
+    uploaded = BytesIO(pdf_factory(7).read_bytes())
+    uploaded.name, uploaded.file_id, uploaded.size = "lecture.pdf", "one-slide", len(uploaded.getbuffer())
+    monkeypatch.setattr(st, "file_uploader", lambda *args, **kwargs: uploaded)
+    monkeypatch.setenv("EXAMPRINT_DB", str(tmp_path / "one-slide.sqlite"))
+    app = AppTest.from_file("../app.py").run(timeout=20)
+    next(s for s in app.selectbox if s.label == "Slides per side").set_value(1).run()
+    assert not app.exception
+    assert [entry["printed_page_reference"] for entry in app.session_state.entries] == [str(i) for i in range(1, 8)]
+    button(app, "Go straight to Editable Topic Index →").click().run()
+    assert app.session_state.workflow_tab == "Editable Topic Index"
+    button(app, "Generate selected index PDF").click().run()
+    assert not app.exception and not app.error
+    work = Path(app.session_state.workspace.name)
+    assert not (work / "Preview.pdf").exists()
+    assert not (work / "ExamPrint.pdf").exists()
+    with fitz.open(work / "ExamIndex.pdf") as doc:
+        assert [link["page"] for link in doc[0].get_links()] == list(range(7))
+    status = app.session_state.processing_status
+    assert "Complete · Generating the selected index PDF" in status
+    button(app, "Next: Export →").click().run()
+    assert app.session_state.processing_status == status
+    button(app, "Save changes").click().run()
+    button(app, "Restore saved changes").click().run()
+    assert not app.exception and not app.error
+    assert app.session_state.layout.slides_per_side == 1

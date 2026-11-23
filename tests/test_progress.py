@@ -51,3 +51,18 @@ def test_extraction_reports_contents_before_headings(pdf_factory):
     assert events[1:4] == [1 / 3, 2 / 3, 1]
     assert events[4].startswith("Reading slide headings")
     assert events[-1].startswith("Matching topics")
+
+
+def test_progress_updates_all_tab_slots_and_remembers_last_status():
+    outputs = [[], [], [], []]
+    remembered = []
+    class Slot:
+        def __init__(self, output):
+            self.output = output
+        def html(self, value):
+            self.output.append(value)
+    with FoxProgress("Reading document…", slots=[Slot(output) for output in outputs],
+                     on_update=remembered.append) as progress:
+        progress.stage("Scanning contents", 0, .4)(1)
+    assert all(output == remembered for output in outputs)
+    assert "Complete · Reading document" in remembered[-1]
